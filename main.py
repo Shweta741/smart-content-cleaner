@@ -277,8 +277,7 @@ if process_btn:
 
         # URGENT
         urgent_items = classified["URGENT"]
-        label_html = f"🔴 URGENT <span class='badge badge-urgent'>{len(urgent_items)}</span>"
-        with st.expander(label_html, expanded=True):
+        with st.expander(f"🔴 URGENT  ({len(urgent_items)})", expanded=True):
             if urgent_items:
                 for item in urgent_items:
                     st.markdown(
@@ -296,8 +295,7 @@ if process_btn:
 
         # IMPORTANT
         important_items = classified["IMPORTANT"]
-        label_html = f"🟠 IMPORTANT <span class='badge badge-important'>{len(important_items)}</span>"
-        with st.expander(label_html, expanded=True):
+        with st.expander(f"🟠 IMPORTANT  ({len(important_items)})", expanded=True):
             if important_items:
                 for item in important_items:
                     st.markdown(
@@ -316,8 +314,7 @@ if process_btn:
         # IGNORE
         if show_ignored:
             ignore_items = classified["IGNORE"]
-            label_html = f"⚪ IGNORE <span class='badge badge-ignore'>{len(ignore_items)}</span>"
-            with st.expander(label_html, expanded=False):
+            with st.expander(f"⚪ IGNORE  ({len(ignore_items)})", expanded=False):
                 for item in ignore_items[:20]:   # cap display
                     st.markdown(
                         f"<div class='card card-ignore' style='font-size:0.88rem;color:#555;'>"
