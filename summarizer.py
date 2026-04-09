@@ -1,11 +1,12 @@
 """
 summarizer.py
 AI summarization using HuggingFace distilbart-cnn-12-6.
-Handles chunking for long texts and summary length control.
+Loads model/tokenizer explicitly to avoid task-registry issues
+in newer transformers versions.
 """
 
 import streamlit as st
-from transformers import pipeline
+from transformers import BartTokenizer, BartForConditionalGeneration, pipeline
 
 MODEL_NAME = "sshleifer/distilbart-cnn-12-6"
 
@@ -16,33 +17,38 @@ LENGTH_PRESETS = {
     "Long":   (100, 250),
 }
 
-# Max tokens the model can handle per chunk
-MAX_CHUNK_TOKENS = 900   # conservative limit (model max is ~1024)
+MAX_CHUNK_WORDS   = 900
 MIN_WORDS_FOR_SUMMARY = 30
 
 
 @st.cache_resource(show_spinner=False)
 def load_summarizer():
-    """Load and cache the summarization pipeline."""
+    """
+    Load tokenizer and model explicitly, then wrap in a pipeline.
+    Avoids 'Unknown task summarization' error in newer transformers.
+    """
     try:
+        tokenizer = BartTokenizer.from_pretrained(MODEL_NAME)
+        model     = BartForConditionalGeneration.from_pretrained(MODEL_NAME)
         summarizer = pipeline(
             "summarization",
-            model=MODEL_NAME,
-            device=-1,          # CPU only — safe for cloud
+            model=model,
+            tokenizer=tokenizer,
+            framework="pt",
+            device=-1,       # CPU only — safe for Streamlit Cloud
         )
         return summarizer, None
     except Exception as e:
         return None, str(e)
 
 
-def _chunk_text(text: str, max_words: int = MAX_CHUNK_TOKENS) -> list[str]:
+def _chunk_text(text: str, max_words: int = MAX_CHUNK_WORDS) -> list[str]:
     """Split long text into word-based chunks the model can handle."""
     words = text.split()
-    chunks = []
-    for i in range(0, len(words), max_words):
-        chunk = " ".join(words[i : i + max_words])
-        chunks.append(chunk)
-    return chunks
+    return [
+        " ".join(words[i : i + max_words])
+        for i in range(0, len(words), max_words)
+    ]
 
 
 def summarize(text: str, length: str = "Medium") -> dict:
@@ -54,7 +60,7 @@ def summarize(text: str, length: str = "Medium") -> dict:
         length: One of 'Short', 'Medium', 'Long'.
 
     Returns:
-        dict with 'summary' (str) and optional 'error' (str).
+        dict with 'summary' (str), optional 'note' (str), and 'error' (str|None).
     """
     word_count = len(text.split())
 
@@ -77,7 +83,6 @@ def summarize(text: str, length: str = "Medium") -> dict:
 
         for chunk in chunks:
             chunk_words = len(chunk.split())
-            # Adjust lengths relative to chunk size
             c_max = min(max_len, max(20, chunk_words // 2))
             c_min = min(min_len, c_max - 10)
 
@@ -91,7 +96,7 @@ def summarize(text: str, length: str = "Medium") -> dict:
 
         final_summary = " ".join(partial_summaries)
 
-        # If we have multiple chunk summaries, do a second-pass summary
+        # Second-pass merge if multi-chunk result is still too long
         if len(partial_summaries) > 1 and len(final_summary.split()) > max_len:
             result = summarizer(
                 final_summary,
@@ -101,7 +106,7 @@ def summarize(text: str, length: str = "Medium") -> dict:
             )
             final_summary = result[0]["summary_text"]
 
-        return {"summary": final_summary.strip(), "error": None}
+        return {"summary": final_summary.strip(), "note": None, "error": None}
 
     except Exception as e:
-        return {"summary": "", "error": str(e)}
+        return {"summary": "", "note": None, "error": str(e)}
